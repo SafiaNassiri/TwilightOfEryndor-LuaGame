@@ -1,6 +1,6 @@
 # Twilight of Eryndor
 
-**Twilight of Eryndor** is a 2D dungeon crawler built entirely in **Lua** using the **Love2D** framework. Explore the ruins of the ancient kingdom of Eryndor, battle enemies, collect loot, and master the dual **Light & Shadow** skills to overcome puzzles and reach hidden areas.
+Twilight of Eryndor is a 2D dungeon crawler built entirely in Lua using the Love2D framework. Explore the ruins of the ancient kingdom of Eryndor, battle enemies, collect loot, and master the dual Light & Shadow skills to overcome puzzles and reach hidden areas.
 
 ---
 
@@ -19,7 +19,7 @@
 
 ## Installation
 
-1. Download and install **[Love2D](https://love2d.org/)** (version 11.4 or higher recommended).  
+1. Download and install [Love2D](https://love2d.org/) (version 11.4 or higher recommended).  
 2. Clone or download this repository:
 
 ```bash

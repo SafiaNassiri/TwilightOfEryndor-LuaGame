@@ -27,7 +27,7 @@ git clone https://github.com/YourUsername/TwilightOfEryndor-LuaGame.git
 ```
 3. Navigate to the project folder and run the game:
 ```bash
-love
+love TwilightOfEryndor-LuaGame
 ```
 
 ---

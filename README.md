@@ -36,10 +36,9 @@ love
 | Action            | Key / Button      |
 | ----------------- | ----------------- |
 | Move              | Arrow Keys / WASD |
-| Jump              | Space             |
 | Use Light Skill   | L                 |
 | Use Shadow Skill  | K                 |
-| Attack / Interact | E                 |
+| Attack / Interact | E / Left Click    |
 | Pause             | Esc               |
 
 (Controls can be customized in controls.lua.)

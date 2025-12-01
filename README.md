@@ -27,7 +27,7 @@ git clone https://github.com/YourUsername/TwilightOfEryndor-LuaGame.git
 ```
 3. Navigate to the project folder and run the game:
 ```bash
-love TwilightOfEryndor-LuaGame
+love .\TwilightOfEryndor-LuaGame\
 ```
 
 ---
@@ -52,8 +52,9 @@ TwilightOfEryndor-LuaGame/
 ├── conf.lua          # Love2D configuration
 ├── player.lua        # Player logic and skill mechanics
 ├── dungeon.lua       # Procedural dungeon generation
-├── enemies.lua       # Enemy AI and behaviors
+├── enemy.lua         # Enemy AI and behaviors
 ├── items.lua         # Loot, potions, and artifacts
+├── spawner.lua       # Logic to randomly spawn enemies in a dungeon and increase waves overt time
 ├── rooms.lua         # Room layouts and puzzle logic
 ├── assets/           # Sprites, audio, and tiles
 └── README.md         # This file

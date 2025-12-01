@@ -43,10 +43,10 @@ function love.load()
 
     spawner = Spawner:new(dungeon, player)
 
-    enemies = {}
-    for i = 1, 3 do
-        spawnEnemy()
-    end
+    -- enemies = {}
+    -- for i = 1, 3 do
+    --     spawnEnemy()
+    -- end
 
     camera = Camera:new(px, py)
     if dungeon.mapWidth and dungeon.mapHeight then
@@ -109,13 +109,17 @@ end
 
 function love.update(dt)
     if not isDead then
-        player:update(dt, enemies)
+        -- Pass spawner.enemies to player
+        player:update(dt, spawner.enemies)
 
-        -- Update enemies
-        for i = #enemies, 1, -1 do
-            local e = enemies[i]
+        -- Update spawner (which updates and spawns enemies internally)
+        spawner:update(dt)
+
+        -- Update enemies from spawner
+        for i = #spawner.enemies, 1, -1 do
+            local e = spawner.enemies[i]
             if e.hp <= 0 then
-                table.remove(enemies, i)
+                table.remove(spawner.enemies, i)
             else
                 e:update(dt)
                 e:attack(dt, camera)
@@ -135,9 +139,6 @@ function love.update(dt)
                 table.remove(upgrades, i)
             end
         end
-
-        -- Update spawner
-        spawner:update(dt)
 
         -- Check death
         if player.hp <= 0 and not isDead then
@@ -169,7 +170,7 @@ function love.draw()
             love.graphics.rectangle("fill", u.x - u.size/2, u.y - u.size/2, u.size, u.size)
         end
 
-        for _, e in ipairs(enemies) do
+        for _, e in ipairs(spawner.enemies) do
             e:draw()
         end
 

@@ -1,6 +1,13 @@
 local Spawner = {}
 Spawner.__index = Spawner
 
+-- Enemy types (you can adjust or pass from main.lua)
+local enemyTypes = {
+    {speed = 80, hp = 30, color = {1,0,0}, type = "melee"},
+    {speed = 50, hp = 50, color = {1,0.5,0}, type = "tank"},
+    {speed = 120, hp = 20, color = {0,1,0}, type = "ranged"}
+}
+
 function Spawner:new(dungeon, player)
     local s = {
         dungeon = dungeon,
@@ -16,6 +23,19 @@ function Spawner:new(dungeon, player)
     return s
 end
 
+-- Helper: pick a random walkable tile
+local function randomWalkablePosition(dungeon)
+    local ts = dungeon.tileSize or 32
+    local x, y
+    repeat
+        local gx = math.random(1, dungeon.gridW)
+        local gy = math.random(1, dungeon.gridH)
+        x, y = (gx-0.5)*ts, (gy-0.5)*ts
+    until dungeon:isWalkable(x, y)
+    return x, y
+end
+
+-- Update: handle wave timers and spawning
 function Spawner:update(dt)
     -- Spawn wave if timer elapsed
     self.waveTimer = self.waveTimer - dt
@@ -30,27 +50,19 @@ function Spawner:update(dt)
     if self.enemiesToSpawn > 0 then
         self.spawnTimer = self.spawnTimer - dt
         if self.spawnTimer <= 0 then
-            local e = require("enemy"):new(0,0, 30, 80, {1,0,0}, "melee")
+            local Enemy = require("enemy")
+            local typeDef = enemyTypes[math.random(#enemyTypes)]  -- pick random type
+            local e = Enemy:new(0, 0, typeDef.hp, typeDef.speed, typeDef.color, typeDef.type)
             e:setDungeon(self.dungeon)
             e:setTarget(self.player)
-            -- Spawn outside of screen
-            local mapW, mapH = self.dungeon.gridW * self.dungeon.tileSize, self.dungeon.gridH * self.dungeon.tileSize
-            e:spawnAtEdge(self.player.x, self.player.y, mapW, mapH)
-            table.insert(self.enemies, e)
 
+            -- Spawn on a random walkable tile
+            local x, y = randomWalkablePosition(self.dungeon)
+            e.x, e.y = x, y
+
+            table.insert(self.enemies, e)
             self.enemiesToSpawn = self.enemiesToSpawn - 1
             self.spawnTimer = self.spawnInterval
-        end
-    end
-
-    -- Update all enemies
-    for i=#self.enemies,1,-1 do
-        local e = self.enemies[i]
-        if e.hp <= 0 then
-            table.remove(self.enemies, i)
-        else
-            e:update(dt)
-            e:attack(dt, {x = self.player.x, y = self.player.y})
         end
     end
 end

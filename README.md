@@ -63,7 +63,7 @@ TwilightOfEryndor-LuaGame/
 ---
 
 ## Roadmap
-[ ] Procedural dungeon generation
+[x] Procedural dungeon generation
 [ ] Light & Shadow skill system
 [ ] Basic combat system
 [ ] Loot & potion system

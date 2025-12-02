@@ -8,7 +8,9 @@ local function insideGrid(g, x, y)
     return x >= 1 and x <= g.gridW and y >= 1 and y <= g.gridH
 end
 
--- Prune dead ends (removes tiles with only one neighbor)
+---------------------------------------------
+-- Prune dead ends
+---------------------------------------------
 function Dungeon:pruneDeadEndsFunc()
     local changed = true
     while changed do
@@ -31,7 +33,9 @@ function Dungeon:pruneDeadEndsFunc()
     end
 end
 
--- Connect all disconnected floor regions
+---------------------------------------------
+-- Connect regions
+---------------------------------------------
 function Dungeon:connectDisjointAreas()
     local regionId = {}
     local currentId = 0
@@ -57,7 +61,6 @@ function Dungeon:connectDisjointAreas()
         end
     end
 
-    -- assign region ids
     for y = 1, self.gridH do
         for x = 1, self.gridW do
             regionId[y] = regionId[y] or {}
@@ -70,19 +73,16 @@ function Dungeon:connectDisjointAreas()
 
     if currentId <= 1 then return end
 
-    -- Build region tile lists
     local regions = {}
     for id = 1, currentId do regions[id] = {} end
+
     for y = 1, self.gridH do
         for x = 1, self.gridW do
             local rid = regionId[y][x]
-            if rid then
-                table.insert(regions[rid], {x=x,y=y})
-            end
+            if rid then table.insert(regions[rid], {x=x,y=y}) end
         end
     end
 
-    -- Connect all regions to region 1
     local mainRegion = regions[1]
     for rid = 2, currentId do
         local bestDist = math.huge
@@ -96,11 +96,12 @@ function Dungeon:connectDisjointAreas()
                 end
             end
         end
+
         if bestPair then
             local x1, y1 = bestPair[1].x, bestPair[1].y
             local x2, y2 = bestPair[2].x, bestPair[2].y
-            -- carve straight corridor
             local x, y = x1, y1
+
             while x ~= x2 do
                 self.tiles[y][x] = 1
                 x = x + (x2 > x and 1 or -1)
@@ -113,7 +114,9 @@ function Dungeon:connectDisjointAreas()
     end
 end
 
--- Dungeon constructor
+---------------------------------------------
+-- Constructor
+---------------------------------------------
 function Dungeon:new(opts)
     opts = opts or {}
     local d = {
@@ -127,6 +130,9 @@ function Dungeon:new(opts)
         maxAttempts = opts.maxAttempts or 8,
         minFloorFraction = opts.minFloorFraction or 0.35,
         pruneDeadEnds = opts.pruneDeadEnds == nil and false or opts.pruneDeadEnds,
+
+        -- 🔥 FIX: max rooms constant added
+        MAX_ROOMS = opts.MAX_ROOMS or 18
     }
     setmetatable(d, Dungeon)
 
@@ -140,7 +146,7 @@ function Dungeon:new(opts)
         d:generateMaze()
         d:connectRoomsToMaze()
         d:applyRandomWalkOverlay()
-        d:connectDisjointAreas() -- <--- ensure full connectivity
+        d:connectDisjointAreas()
         if d.pruneDeadEnds then d:pruneDeadEndsFunc() end
         if d:validate() then
             success = true
@@ -149,17 +155,16 @@ function Dungeon:new(opts)
         end
     end
 
-    if success then
-        print("[Dungeon] generated successfully.")
-    else
-        print("[Dungeon] FAILED after " .. d.maxAttempts .. " attempts.")
-    end
+    if success then print("[Dungeon] generated successfully.")
+    else print("[Dungeon] FAILED after " .. d.maxAttempts .. " attempts.") end
 
     d:buildFloorList()
     return d
 end
 
--- Initialize grid
+---------------------------------------------
+-- Clear grid
+---------------------------------------------
 function Dungeon:clear()
     self.rooms = {}
     self.floorList = {}
@@ -172,12 +177,15 @@ function Dungeon:clear()
     end
 end
 
+---------------------------------------------
 -- Room carving
+---------------------------------------------
 function Dungeon:carveRect(cx, cy, w, h)
     local x0 = math.max(1, cx)
     local y0 = math.max(1, cy)
     local x1 = math.min(self.gridW, cx + w - 1)
     local y1 = math.min(self.gridH, cy + h - 1)
+
     for y = y0, y1 do
         for x = x0, x1 do
             self.tiles[y][x] = 1
@@ -185,13 +193,16 @@ function Dungeon:carveRect(cx, cy, w, h)
     end
 end
 
--- Room placement
--- Room placement (more rooms)
+---------------------------------------------
+-- Room placement (uses MAX_ROOMS)
+---------------------------------------------
 function Dungeon:placeRooms()
-    local attempts = math.floor((self.gridW * self.gridH) / 80) + 12  -- increased attempts
+    local attempts = self.MAX_ROOMS * 3
     for i = 1, attempts do
-        local rw = randInt(6, 14)  -- slightly larger width
-        local rh = randInt(6, 12)  -- slightly larger height
+        if #self.rooms >= self.MAX_ROOMS then break end
+
+        local rw = randInt(6, 14)
+        local rh = randInt(6, 12)
         local rx = randInt(2, self.gridW - rw - 1)
         local ry = randInt(2, self.gridH - rh - 1)
 
@@ -213,7 +224,9 @@ function Dungeon:placeRooms()
     end
 end
 
--- Sparse maze generation
+---------------------------------------------
+-- Maze
+---------------------------------------------
 function Dungeon:generateMaze()
     local walkers = randInt(2, 4)
     local lifespan = math.floor((self.gridW * self.gridH) / 200)
@@ -232,7 +245,9 @@ function Dungeon:generateMaze()
     end
 end
 
--- Connect rooms to open paths
+---------------------------------------------
+-- Connect rooms
+---------------------------------------------
 function Dungeon:connectRoomsToMaze()
     for _, room in ipairs(self.rooms) do
         local rcx = math.floor(room.x + room.w / 2)
@@ -253,7 +268,8 @@ function Dungeon:connectRoomsToMaze()
                     if not visited[ny][nx] then
                         visited[ny][nx] = true
                         if self.tiles[ny][nx] == 1
-                            and not (nx>=room.x and nx < room.x+room.w and ny>=room.y and ny<room.y+room.h)
+                            and not (nx>=room.x and nx < room.x+room.w
+                            and ny>=room.y and ny<room.y+room.h)
                         then
                             found = {x=nx,y=ny}
                             break
@@ -279,7 +295,9 @@ function Dungeon:connectRoomsToMaze()
     end
 end
 
+---------------------------------------------
 -- Random walk overlay
+---------------------------------------------
 function Dungeon:applyRandomWalkOverlay()
     local walkers = randInt(3, 6)
     local lifespan = math.floor((self.gridW * self.gridH) / 50)
@@ -298,22 +316,29 @@ function Dungeon:applyRandomWalkOverlay()
     end
 end
 
+---------------------------------------------
 -- Floor list
+---------------------------------------------
 function Dungeon:buildFloorList()
     self.floorList = {}
     for y = 1, self.gridH do
         for x = 1, self.gridW do
             if self.tiles[y][x] == 1 then
-                table.insert(self.floorList, { x = (x-1)*self.tileSize, y = (y-1)*self.tileSize })
+                table.insert(self.floorList,
+                    { x = (x-1)*self.tileSize, y = (y-1)*self.tileSize }
+                )
             end
         end
     end
 end
 
--- Map validator
+---------------------------------------------
+-- Validator
+---------------------------------------------
 function Dungeon:validate()
     local startx, starty = nil, nil
     local floorCount = 0
+
     for y=1,self.gridH do
         for x=1,self.gridW do
             if self.tiles[y][x] == 1 then
@@ -322,6 +347,7 @@ function Dungeon:validate()
             end
         end
     end
+
     if floorCount == 0 then return false end
     if floorCount < math.floor(self.gridW*self.gridH*self.minFloorFraction) then return false end
 
@@ -329,11 +355,12 @@ function Dungeon:validate()
     local q = { {x=startx,y=starty} }
     visited[starty] = {[startx] = true}
     local seen = 0
+
     while #q > 0 do
         local cur = table.remove(q, 1)
         seen = seen + 1
-        local dirs = {{1,0},{-1,0},{0,1},{0,-1}}
-        for _,d in ipairs(dirs) do
+
+        for _,d in ipairs({{1,0},{-1,0},{0,1},{0,-1}}) do
             local nx,ny = cur.x+d[1], cur.y+d[2]
             if nx>=1 and nx<=self.gridW and ny>=1 and ny<=self.gridH then
                 visited[ny] = visited[ny] or {}
@@ -348,7 +375,9 @@ function Dungeon:validate()
     return (seen / floorCount) >= 0.80
 end
 
+---------------------------------------------
 -- Player spawn
+---------------------------------------------
 function Dungeon:getPlayerStart()
     if #self.rooms > 0 then
         local r = self.rooms[1]
@@ -363,7 +392,9 @@ function Dungeon:getPlayerStart()
     return math.floor(self.mapWidth/2), math.floor(self.mapHeight/2)
 end
 
+---------------------------------------------
 -- Walkability
+---------------------------------------------
 function Dungeon:isWalkable(px, py)
     local tx = math.floor(px / self.tileSize) + 1
     local ty = math.floor(py / self.tileSize) + 1
@@ -371,12 +402,15 @@ function Dungeon:isWalkable(px, py)
     return self.tiles[ty][tx] == 1
 end
 
--- Line-of-sight
+---------------------------------------------
+-- Line-of-sight 
+---------------------------------------------
 function Dungeon:lineOfSight(x1, y1, x2, y2)
     local dx = x2 - x1
     local dy = y2 - y1
     local dist = math.sqrt(dx*dx + dy*dy)
     if dist == 0 then return true end
+
     local steps = math.ceil(dist / self.tileSize)
     for i = 0, steps do
         local t = i / steps
@@ -384,13 +418,16 @@ function Dungeon:lineOfSight(x1, y1, x2, y2)
         local yt = y1 + dy * t
         local tx = math.floor(xt / self.tileSize) + 1
         local ty = math.floor(yt / self.tileSize) + 1
+
         if tx < 1 or tx > self.gridW or ty < 1 or ty > self.gridH then return false end
         if self.tiles[ty][tx] ~= 1 then return false end
     end
     return true
 end
 
--- Debug drawing
+---------------------------------------------
+-- Drawing
+---------------------------------------------
 function Dungeon:drawDebug()
     love.graphics.setColor(1,0,0,0.5)
     for _, r in ipairs(self.rooms) do
@@ -401,6 +438,7 @@ function Dungeon:drawDebug()
             r.h * self.tileSize
         )
     end
+
     love.graphics.setColor(0,1,1,0.5)
     love.graphics.print("DEBUG MODE\nRooms: "..#self.rooms, 10, 10)
 end
@@ -411,6 +449,7 @@ function Dungeon:draw(showDebug)
         love.graphics.rectangle("fill", t.x, t.y, self.tileSize, self.tileSize)
     end
 
+    -- walls
     love.graphics.setColor(0.5,0.4,0.4)
     for y=1,self.gridH do
         for x=1,self.gridW do

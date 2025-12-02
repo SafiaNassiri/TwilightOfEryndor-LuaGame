@@ -4,12 +4,12 @@ local Dungeon = require("dungeon")
 local Enemy = require("enemy")
 local Spawner = require("spawner")
 
--- Define enemy types with their specific behavior types
-local enemyTypes = {
-    {speed = 80, hp = 30, color = {1,0,0}, type = "melee"},   -- normal melee
-    {speed = 50, hp = 50, color = {1,0.5,0}, type = "tank"},  -- tank
-    {speed = 120, hp = 20, color = {0,1,0}, type = "ranged"} -- fast ranged
-}
+-- Enemy types with their specific behavior types
+-- local enemyTypes = {
+--     {speed = 80, hp = 30, color = {1,0,0}, type = "melee"},   -- normal melee
+--     {speed = 50, hp = 50, color = {1,0.5,0}, type = "tank"},  -- tank
+--     {speed = 120, hp = 20, color = {0,1,0}, type = "ranged"} -- fast ranged
+-- }
 
 -- Game state
 local dungeon, player, enemies, camera
@@ -22,8 +22,8 @@ local deathLore = {
 }
 
 local upgrades = {}
-local enemySpawnTimer = 0
-local enemySpawnInterval = 5
+-- local enemySpawnTimer = 0
+-- local enemySpawnInterval = 5
 
 function love.load()
     math.randomseed(os.time())
@@ -42,11 +42,6 @@ function love.load()
     player:setDungeon(dungeon)
 
     spawner = Spawner:new(dungeon, player)
-
-    -- enemies = {}
-    -- for i = 1, 3 do
-    --     spawnEnemy()
-    -- end
 
     camera = Camera:new(px, py)
     if dungeon.mapWidth and dungeon.mapHeight then
@@ -112,14 +107,28 @@ function love.update(dt)
         -- Pass spawner.enemies to player
         player:update(dt, spawner.enemies)
 
-        -- Update spawner (which updates and spawns enemies internally)
+        -- Update spawner
         spawner:update(dt)
 
         -- Update enemies from spawner
         for i = #spawner.enemies, 1, -1 do
             local e = spawner.enemies[i]
+
             if e.hp <= 0 then
+                
+                -- LOOT DROP (chance scales with wave number)
+                local baseChance = 0.10              -- 10% base drop rate
+                local perWaveBonus = 0.03            -- +3% per wave
+                local dropChance = baseChance + spawner.wave * perWaveBonus
+
+                if math.random() < dropChance then
+                    -- pick loot type (50/50 here)
+                    local lootType = (math.random() < 0.5) and "speed" or "heal"
+                    spawnUpgrade(lootType)
+                end
+
                 table.remove(spawner.enemies, i)
+
             else
                 e:update(dt)
                 e:attack(dt, camera)
@@ -166,7 +175,7 @@ function love.draw()
                 love.graphics.setColor(0,1,0)
             elseif u.type == "heal" then
                 love.graphics.setColor(0,0,1)
-            end
+            end 
             love.graphics.rectangle("fill", u.x - u.size/2, u.y - u.size/2, u.size, u.size)
         end
 

@@ -1,4 +1,5 @@
 local Enemy = {}
+local Items = require("items")
 Enemy.__index = Enemy
 
 -- On-screen check
@@ -51,7 +52,15 @@ function Enemy:setTarget(p) self.target = p end
 -- MOVEMENT: chase player if visible, else patrol
 -------------------------------------------------------------------
 function Enemy:update(dt)
-    if self.hp <= 0 then return end
+    if self.hp <= 0 then
+        -- drop loot once
+        if not self._lootDropped then
+            self:dropLoot()
+            self._lootDropped = true
+        end
+        return
+    end
+
     local half = self.size / 2
 
     -- Check if chasing player
@@ -64,7 +73,7 @@ function Enemy:update(dt)
         self.chasing = true
         local dx, dy = self.target.x - self.x, self.target.y - self.y
         local dist = math.sqrt(dx*dx + dy*dy)
-        local stopDist = (self.type=="melee" and self.size + self.target.size + 4)
+        local stopDist = (self.type=="melee" and self.size + self.target.size + 8)
                        or (self.type=="tank" and self.size + self.target.size + 8)
                        or 50
         if dist > stopDist then
@@ -201,8 +210,8 @@ function Enemy:draw()
         if self.type=="melee" then
             love.graphics.setColor(1,0,0,0.5)
             local angle = math.atan2(self.target.y - self.y, self.target.x - self.x)
-            local radius = self.size + (self.target and self.target.size or 0)
-            love.graphics.arc("fill", self.x, self.y, radius, angle - 0.3, angle + 0.3)
+            local radius = self.size + (self.target and self.target.size or 0) + 6
+            love.graphics.arc("fill", self.x, self.y, radius, angle - 0.6, angle + 0.6)
         elseif self.type=="tank" then
             love.graphics.setColor(1,0.5,0,0.5)
             love.graphics.circle("fill", self.x, self.y, self.size*3)
@@ -237,6 +246,15 @@ function Enemy:spawnAtEdge(playerX, playerY, mapWidth, mapHeight)
     else
         self.x = mapWidth
         self.y = math.random(0, mapHeight)
+    end
+end
+
+function Enemy:dropLoot()
+    if not self.dungeon then return end
+    if math.random() < 0.30 then  -- 30% drop rate
+        local lootType = (math.random() < 0.8) and "health_potion" or "rare_shard"
+        local item = Items:new(lootType, self.x, self.y)
+        table.insert(self.dungeon.items, item)
     end
 end
 

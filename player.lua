@@ -95,6 +95,14 @@ function Player:update(dt, enemies)
     if self.hitTimer > 0 then
         self.hitTimer = self.hitTimer - dt
     end
+
+    -- Pickup any items
+    self:pickupItems()
+
+    -- Update hit timer
+    if self.hitTimer > 0 then
+        self.hitTimer = self.hitTimer - dt
+    end
 end
 
 -- Fire projectile
@@ -147,6 +155,28 @@ function Player:damage(amount)
     if self.hitTimer <= 0 then      -- only take damage if not in invincibility
         self.hp = self.hp - amount
         self.hitTimer = self.hitDuration  -- trigger hit flash / i-frames
+    end
+end
+
+function Player:pickupItems()
+    if not self.dungeon or not self.dungeon.items then return end
+
+    for _, item in ipairs(self.dungeon.items) do
+        if not item.collected then
+            if math.abs(self.x - item.x) < (item.size + self.size) and
+               math.abs(self.y - item.y) < (item.size + self.size)
+            then
+                item.collected = true
+
+                if item.type == "consumable" then
+                    self.hp = math.min(self.maxHp, self.hp + item.amount)
+                elseif item.type == "key" then
+                    self.keys = (self.keys or 0) + 1
+                elseif item.type == "rare" then
+                    self.rareShards = (self.rareShards or 0) + 1
+                end
+            end
+        end
     end
 end
 

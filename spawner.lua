@@ -23,7 +23,7 @@ function Spawner:new(dungeon, player)
     return s
 end
 
--- Helper: pick a random walkable tile
+-- Pick a random walkable tile
 local function randomWalkablePosition(dungeon)
     local ts = dungeon.tileSize or 32
     local x, y
@@ -35,7 +35,7 @@ local function randomWalkablePosition(dungeon)
     return x, y
 end
 
--- Update: handle wave timers and spawning
+-- Handle wave timers and spawning
 function Spawner:update(dt)
     -- Spawn wave if timer elapsed
     self.waveTimer = self.waveTimer - dt

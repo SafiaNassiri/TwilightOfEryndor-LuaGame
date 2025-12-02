@@ -3,9 +3,9 @@ Spawner.__index = Spawner
 
 -- Enemy types (you can adjust or pass from main.lua)
 local enemyTypes = {
-    {speed = 80, hp = 30, color = {1,0,0}, type = "melee"},
-    {speed = 50, hp = 50, color = {1,0.5,0}, type = "tank"},
-    {speed = 120, hp = 20, color = {0,1,0}, type = "ranged"}
+    {speed = 90, hp = 50, color = {1,0,0}, type = "melee"},
+    {speed = 60, hp = 70, color = {1,0.5,0}, type = "tank"},
+    {speed = 120, hp = 35, color = {0,1,0}, type = "ranged"}
 }
 
 function Spawner:new(dungeon, player)

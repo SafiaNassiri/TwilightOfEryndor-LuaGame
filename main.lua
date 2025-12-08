@@ -4,13 +4,6 @@ local Dungeon = require("dungeon")
 local Enemy = require("enemy")
 local Spawner = require("spawner")
 
--- Enemy types with their specific behavior types
--- local enemyTypes = {
---     {speed = 80, hp = 30, color = {1,0,0}, type = "melee"},   -- normal melee
---     {speed = 50, hp = 50, color = {1,0.5,0}, type = "tank"},  -- tank
---     {speed = 120, hp = 20, color = {0,1,0}, type = "ranged"} -- fast ranged
--- }
-
 -- Game state
 local dungeon, player, enemies, camera
 local isDead = false

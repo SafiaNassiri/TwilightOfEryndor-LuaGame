@@ -20,11 +20,19 @@ end
 
 -- Constructor
 function Enemy:new(x, y, hp, speed, color, type, patrolPath)
+    -- Set size based on type
+    local sizeMap = {
+        tank = 24,      -- biggest
+        melee = 18,     -- slightly bigger than player
+        ranged = 14     -- slightly smaller than player
+    }
+    
     local e = {
         x = x or 0,
         y = y or 0,
-        size = 16,
+        size = sizeMap[type] or 16,
         hp = hp or 30,
+        maxHp = hp or 30,
         speed = speed or 80,
         dungeon = nil,
         target = nil,
@@ -39,7 +47,18 @@ function Enemy:new(x, y, hp, speed, color, type, patrolPath)
         telegraphDuration = 0.5,
         telegraphX = 0,
         telegraphY = 0,
-        projectiles = {}
+        projectiles = {},
+        -- Stretch animation
+        stretchTimer = 0,
+        stretchSpeed = 12,
+        walkStretchAmount = 0.25,   -- how much to stretch when walking (25%)
+        breatheStretchAmount = 0.12, -- how much to stretch when breathing (12%)
+        isMoving = false,
+        -- Death animation
+        isDying = false,
+        deathTimer = 0,
+        deathDuration = 0.6,
+        deathParticles = {}
     }
     setmetatable(e, Enemy)
     return e
@@ -52,12 +71,29 @@ function Enemy:setTarget(p) self.target = p end
 -- MOVEMENT: chase player if visible, else patrol
 -------------------------------------------------------------------
 function Enemy:update(dt)
-    if self.hp <= 0 then
-        -- drop loot once
-        if not self._lootDropped then
-            self:dropLoot()
-            self._lootDropped = true
+    -- Handle death animation
+    if self.isDying then
+        self.deathTimer = self.deathTimer + dt
+        
+        -- Update death particles
+        for i = #self.deathParticles, 1, -1 do
+            local p = self.deathParticles[i]
+            p.x = p.x + p.vx * dt
+            p.y = p.y + p.vy * dt
+            p.life = p.life - dt
+            p.alpha = p.life / 0.6  -- fade out
+            
+            if p.life <= 0 then
+                table.remove(self.deathParticles, i)
+            end
         end
+        
+        return
+    end
+    
+    if self.hp <= 0 then
+        -- Start death animation (loot dropping is handled in main.lua)
+        self:startDeathAnimation()
         return
     end
 
@@ -69,6 +105,8 @@ function Enemy:update(dt)
         chasing = self.dungeon:lineOfSight(self.x, self.y, self.target.x, self.target.y)
     end
 
+    self.isMoving = false
+
     if chasing then
         self.chasing = true
         local dx, dy = self.target.x - self.x, self.target.y - self.y
@@ -79,8 +117,14 @@ function Enemy:update(dt)
         if dist > stopDist then
             local nx, ny = dx/dist, dy/dist
             local nextX, nextY = self.x + nx*self.speed*dt, self.y + ny*self.speed*dt
-            if canMoveTo(self, nextX, self.y) then self.x = nextX end
-            if canMoveTo(self, self.x, nextY) then self.y = nextY end
+            if canMoveTo(self, nextX, self.y) then 
+                self.x = nextX
+                self.isMoving = true
+            end
+            if canMoveTo(self, self.x, nextY) then 
+                self.y = nextY
+                self.isMoving = true
+            end
             self.moveDir = {x=nx, y=ny}
         else
             self.moveDir = {x=0, y=0}
@@ -116,10 +160,12 @@ function Enemy:update(dt)
             if canMoveTo(self, nextX, self.y) then
                 self.x = nextX
                 moved = true
+                self.isMoving = true
             end
             if canMoveTo(self, self.x, nextY) then
                 self.y = nextY
                 moved = true
+                self.isMoving = true
             end
 
             -- If hit wall, pick a new patrol target
@@ -133,13 +179,40 @@ function Enemy:update(dt)
             self.moveDir = {x=nx, y=ny}
         end
     end
+    
+    -- Update stretch animation
+    self.stretchTimer = self.stretchTimer + dt * self.stretchSpeed
+end
+
+-------------------------------------------------------------------
+-- DEATH ANIMATION
+-------------------------------------------------------------------
+function Enemy:startDeathAnimation()
+    self.isDying = true
+    self.deathTimer = 0
+    
+    -- Create burst of particles
+    local numParticles = 8
+    for i = 1, numParticles do
+        local angle = (i / numParticles) * math.pi * 2
+        local speed = 60 + math.random() * 40
+        table.insert(self.deathParticles, {
+            x = self.x,
+            y = self.y,
+            vx = math.cos(angle) * speed,
+            vy = math.sin(angle) * speed,
+            size = self.size / 3 + math.random() * 3,
+            life = 0.6,
+            alpha = 1
+        })
+    end
 end
 
 -------------------------------------------------------------------
 -- ATTACK
 -------------------------------------------------------------------
 function Enemy:attack(dt, cam)
-    if self.hp <= 0 or not self.target then return end
+    if self.hp <= 0 or not self.target or self.isDying then return end
     if not isOnScreen(self.x, self.y, cam) or not self.chasing then return end
 
     local dx, dy = self.target.x - self.x, self.target.y - self.y
@@ -201,10 +274,42 @@ end
 -- DRAW
 -------------------------------------------------------------------
 function Enemy:draw()
+    -- Draw death animation
+    if self.isDying then
+        for _, p in ipairs(self.deathParticles) do
+            love.graphics.setColor(self.color[1], self.color[2], self.color[3], p.alpha)
+            love.graphics.rectangle("fill", p.x - p.size/2, p.y - p.size/2, p.size, p.size)
+        end
+        return
+    end
+    
     if self.hp <= 0 then return end
 
+    -- Calculate stretch scale
+    local scaleX, scaleY = 1, 1
+    
+    if self.isMoving then
+        -- Vertical stretch when walking (squash and stretch)
+        local stretchFactor = math.sin(self.stretchTimer) * self.walkStretchAmount
+        scaleY = 1 + stretchFactor      -- stretch vertically
+        scaleX = 1 - stretchFactor * 0.5 -- squash horizontally (less than vertical)
+    else
+        -- Horizontal breathing when idle
+        local breatheFactor = math.sin(self.stretchTimer * 0.5) * self.breatheStretchAmount
+        scaleX = 1 + breatheFactor      -- stretch horizontally
+        scaleY = 1 - breatheFactor * 0.3 -- slight vertical squash
+    end
+    
+    -- Calculate stretched dimensions
+    local drawWidth = self.size * scaleX
+    local drawHeight = self.size * scaleY
+
     love.graphics.setColor(self.color[1], self.color[2], self.color[3], self.color[4] or 1)
-    love.graphics.rectangle("fill", self.x-self.size/2, self.y-self.size/2, self.size, self.size)
+    love.graphics.rectangle("fill", 
+        self.x - drawWidth/2, 
+        self.y - drawHeight/2, 
+        drawWidth, 
+        drawHeight)
 
     if self.attackTelegraph > 0 then
         if self.type=="melee" then
@@ -249,13 +354,4 @@ function Enemy:spawnAtEdge(playerX, playerY, mapWidth, mapHeight)
     end
 end
 
-function Enemy:dropLoot()
-    if not self.dungeon then return end
-    if math.random() < 0.30 then  -- 30% drop rate
-        local lootType = (math.random() < 0.8) and "health_potion" or "rare_shard"
-        local item = Items:new(lootType, self.x, self.y)
-        table.insert(self.dungeon.items, item)
-    end
-end
-
-return Enemy;
+return Enemy

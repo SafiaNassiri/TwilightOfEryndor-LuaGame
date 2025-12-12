@@ -3,9 +3,14 @@ local Player = require("player")
 local Dungeon = require("dungeon")
 local Enemy = require("enemy")
 local Spawner = require("spawner")
+local HUD = require("hud")
+local hud = HUD:new()
+
+local Audio = require("audio")
+local Items = require("items")
 
 -- Game state
-local dungeon, player, enemies, camera
+local dungeon, player, spawner, camera
 local isDead = false
 local deathMessage = ""
 local deathLore = {
@@ -15,142 +20,131 @@ local deathLore = {
 }
 
 local upgrades = {}
--- local enemySpawnTimer = 0
--- local enemySpawnInterval = 5
+local pickupMessages = {}    -- Health/Mana notifications
+local storyMessages = {}     -- Rare shard story
+
+-- Spawn upgrades
+local function spawnUpgrade(type, x, y)
+    local itemData = Items.database[type]
+    if itemData then
+        table.insert(upgrades, {
+            x = x, y = y,
+            type = type,
+            size = itemData.size,
+            color = itemData.color,
+            amount = itemData.amount,
+            speedIncrease = itemData.speedIncrease,
+            story = itemData.story,
+            pickupMessage = itemData.pickupMessage
+        })
+    end
+end
+
+-- Message helpers
+local function addPickupMessage(text)
+    table.insert(pickupMessages, {text=text, timer=2})
+end
+
+local function addStoryMessage(text)
+    table.insert(storyMessages, {text=text, timer=5})
+end
 
 function love.load()
     math.randomseed(os.time())
+    Audio.load()
+    Audio.playMusic("bg")
 
-    dungeon = Dungeon:new({
-        gridW = 50,
-        gridH = 50,
-        tileSize = 32,
-        maxAttempts = 8,
-        minFloorFraction = 0.28,
-        pruneDeadEnds = true
-    })
-
+    dungeon = Dungeon:new({gridW=50, gridH=50, tileSize=32, maxAttempts=8, minFloorFraction=0.28, pruneDeadEnds=true})
     local px, py = dungeon:getPlayerStart()
     player = Player:new(px, py, 16)
     player:setDungeon(dungeon)
 
     spawner = Spawner:new(dungeon, player)
-
     camera = Camera:new(px, py)
     if dungeon.mapWidth and dungeon.mapHeight then
         camera:setBounds(0, 0, dungeon.mapWidth, dungeon.mapHeight)
     end
-
-    upgrades = {}
-end
-
-function spawnEnemy()
-    local f, ex, ey
-    local camW, camH = love.graphics.getWidth(), love.graphics.getHeight()
-
-    repeat
-        local side = math.random(4)
-
-        if side == 1 then
-            ex = player.x + math.random(-camW/2, camW/2)
-            ey = player.y - camH/2 - dungeon.tileSize
-        elseif side == 2 then
-            ex = player.x + math.random(-camW/2, camW/2)
-            ey = player.y + camH/2 + dungeon.tileSize
-        elseif side == 3 then
-            ex = player.x - camW/2 - dungeon.tileSize
-            ey = player.y + math.random(-camH/2, camH/2)
-        else
-            ex = player.x + camW/2 + dungeon.tileSize
-            ey = player.y + math.random(-camH/2, camH/2)
-        end
-
-        f = nil
-        for _, floor in ipairs(dungeon.floorList) do
-            if math.abs(floor.x + dungeon.tileSize/2 - ex) < dungeon.tileSize/2 and
-               math.abs(floor.y + dungeon.tileSize/2 - ey) < dungeon.tileSize/2 then
-                f = floor
-                break
-            end
-        end
-    until f
-
-    ex = f.x + dungeon.tileSize/2
-    ey = f.y + dungeon.tileSize/2
-
-    local typeDef = enemyTypes[math.random(#enemyTypes)]
-    local e = Enemy:new(ex, ey, typeDef.hp, typeDef.speed, typeDef.color, typeDef.type)
-    e:setDungeon(dungeon)
-    e:setTarget(player)
-    table.insert(enemies, e)
-end
-
-function spawnUpgrade(type)
-    local f = dungeon.floorList[math.random(#dungeon.floorList)]
-    table.insert(upgrades, {
-        x = f.x + dungeon.tileSize/2,
-        y = f.y + dungeon.tileSize/2,
-        type = type,
-        size = 12
-    })
 end
 
 function love.update(dt)
     if not isDead then
-        -- Pass spawner.enemies to player
         player:update(dt, spawner.enemies)
-
-        -- Update spawner
         spawner:update(dt)
+        hud:update(dt)
 
-        -- Update enemies from spawner
-        for i = #spawner.enemies, 1, -1 do
+        -- Update pickup message timers
+        for i=#pickupMessages,1,-1 do
+            pickupMessages[i].timer = pickupMessages[i].timer - dt
+            if pickupMessages[i].timer <= 0 then table.remove(pickupMessages,i) end
+        end
+        -- Update story messages
+        for i=#storyMessages,1,-1 do
+            storyMessages[i].timer = storyMessages[i].timer - dt
+            if storyMessages[i].timer <= 0 then table.remove(storyMessages,i) end
+        end
+
+        -- Handle enemies
+        for i=#spawner.enemies,1,-1 do
             local e = spawner.enemies[i]
+            if e.isDying and e.deathTimer >= e.deathDuration then
+                Audio.play("enemy_death")
+                hud:addKill()
 
-            if e.hp <= 0 then
-                
-                -- LOOT DROP (chance scales with wave number)
-                local baseChance = 0.10              -- 10% base drop rate
-                local perWaveBonus = 0.03            -- +3% per wave
-                local dropChance = baseChance + spawner.wave * perWaveBonus
-
+                -- Loot drop
+                local baseChance = 0.5
+                local perWaveBonus = 0.05
+                local dropChance = math.min(0.95, baseChance + spawner.wave * perWaveBonus)
                 if math.random() < dropChance then
-                    -- pick loot type (50/50 here)
-                    local lootType = (math.random() < 0.5) and "speed" or "heal"
-                    spawnUpgrade(lootType)
+                    local roll = math.random()
+                    local lootType
+                    if roll < 0.45 then lootType = "health_potion"
+                    elseif roll < 0.75 then lootType = "mana_potion"
+                    else lootType = "rare_shard"
+                    end
+                    spawnUpgrade(lootType, e.x, e.y)
                 end
 
-                table.remove(spawner.enemies, i)
-
+                table.remove(spawner.enemies,i)
             else
                 e:update(dt)
-                e:attack(dt, camera)
+                e:attack(dt,camera)
             end
         end
 
-        -- Update upgrades
-        for i = #upgrades, 1, -1 do
+        -- Handle upgrades
+        for i=#upgrades,1,-1 do
             local u = upgrades[i]
-            if math.abs(player.x - u.x) < (player.size + u.size)/2 and
-               math.abs(player.y - u.y) < (player.size + u.size)/2 then
-                if u.type == "speed" then
-                    player.speed = player.speed + 50
-                elseif u.type == "heal" then
-                    player.hp = math.min(player.maxHp, player.hp + 30)
+            if math.abs(player.x-u.x) < (player.size+u.size)/2 and
+               math.abs(player.y-u.y) < (player.size+u.size)/2 then
+                -- Apply effects
+                if u.type=="health_potion" then
+                    player.hp = math.min(player.maxHp, player.hp + (u.amount or 25))
+                    addPickupMessage(u.pickupMessage or "+HP restored")
+                elseif u.type=="mana_potion" then
+                    player.speed = player.speed + (u.speedIncrease or 50)
+                    addPickupMessage(u.pickupMessage or "Mana pool increased")
+                elseif u.type=="rare_shard" then
+                    player.rareShards = (player.rareShards or 0) + 1
+                    player.maxHp = player.maxHp + 10
+                    player.hp = player.hp + 10
+                    addPickupMessage(u.pickupMessage or "Shard collected!")
+                    if u.story then addStoryMessage(u.story) end
                 end
-                table.remove(upgrades, i)
+                table.remove(upgrades,i)
             end
         end
 
-        -- Check death
+        -- Death check
         if player.hp <= 0 and not isDead then
+            Audio.play("player_hurt")
             isDead = true
             deathMessage = deathLore[math.random(#deathLore)]
         end
 
-        camera:update(player.x, player.y)
+        camera:update(player.x,player.y)
     else
         if love.keyboard.isDown("r") then
+            Audio.play("button")
             love.event.quit("restart")
         end
     end
@@ -159,37 +153,46 @@ end
 function love.draw()
     if not isDead then
         camera:attach()
-
         dungeon:draw()
         spawner:draw()
 
+        -- Draw upgrades
         for _, u in ipairs(upgrades) do
-            if u.type == "speed" then
-                love.graphics.setColor(0,1,0)
-            elseif u.type == "heal" then
-                love.graphics.setColor(0,0,1)
-            end 
-            love.graphics.rectangle("fill", u.x - u.size/2, u.y - u.size/2, u.size, u.size)
+            if u.color then love.graphics.setColor(u.color[1],u.color[2],u.color[3]) end
+            love.graphics.circle("fill", u.x, u.y, u.size/2)
         end
 
-        for _, e in ipairs(spawner.enemies) do
-            e:draw()
-        end
-
+        for _, e in ipairs(spawner.enemies) do e:draw() end
         player:draw()
-
         camera:detach()
+
+        hud:draw()
+
+        -- Pickup messages (top-right)
+        local startY = 20
+        for i,msg in ipairs(pickupMessages) do
+            love.graphics.setColor(1,1,0)
+            love.graphics.printf(msg.text,0,startY+(i-1)*20,love.graphics.getWidth()-10,"right")
+        end
+
+        -- Story messages (bottom)
+        local startY = love.graphics.getHeight()-60
+        for i,msg in ipairs(storyMessages) do
+            love.graphics.setColor(0.8,0.8,1)
+            love.graphics.printf(msg.text,20,startY-(i-1)*20,love.graphics.getWidth()-40,"left")
+        end
+        love.graphics.setColor(1,1,1)
     else
         love.graphics.setColor(1,1,1)
-        love.graphics.printf(deathMessage, 0, love.graphics.getHeight()/2 - 20, love.graphics.getWidth(), "center")
-        love.graphics.printf("Press R to restart", 0, love.graphics.getHeight()/2 + 20, love.graphics.getWidth(), "center")
+        love.graphics.printf(deathMessage,0,love.graphics.getHeight()/2-20,love.graphics.getWidth(),"center")
+        love.graphics.printf("Press R to restart",0,love.graphics.getHeight()/2+20,love.graphics.getWidth(),"center")
     end
 end
 
-function love.mousepressed(x, y, button)
-    if button == 1 and not isDead then
+function love.mousepressed(x,y,button)
+    if button==1 and not isDead then
         local wx = x + camera.x - love.graphics.getWidth()/2
         local wy = y + camera.y - love.graphics.getHeight()/2
-        player:attack(wx, wy)
+        player:attack(wx,wy)
     end
 end

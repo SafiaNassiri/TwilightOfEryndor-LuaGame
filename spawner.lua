@@ -1,6 +1,8 @@
 local Spawner = {}
 Spawner.__index = Spawner
 
+local EnemyModule = require("enemy")  -- Load enemy module at the top
+
 -- Enemy types (you can adjust or pass from main.lua)
 local enemyTypes = {
     {speed = 90, hp = 50, color = {1,0,0}, type = "melee"},
@@ -23,15 +25,61 @@ function Spawner:new(dungeon, player)
     return s
 end
 
--- Pick a random walkable tile
-local function randomWalkablePosition(dungeon)
+-- Check if position is off-screen
+local function isOffScreen(x, y, playerX, playerY)
+    local w, h = love.graphics.getWidth(), love.graphics.getHeight()
+    local buffer = 100  -- spawn at least 100 pixels off screen
+    
+    local minX = playerX - w/2 - buffer
+    local maxX = playerX + w/2 + buffer
+    local minY = playerY - h/2 - buffer
+    local maxY = playerY + h/2 + buffer
+    
+    -- Return true if position is outside the viewport
+    return x < minX or x > maxX or y < minY or y > maxY
+end
+
+-- Pick a random walkable tile that's off-screen
+local function randomOffScreenPosition(dungeon, playerX, playerY)
     local ts = dungeon.tileSize or 32
     local x, y
+    local attempts = 0
+    local maxAttempts = 100
+    
     repeat
         local gx = math.random(1, dungeon.gridW)
         local gy = math.random(1, dungeon.gridH)
         x, y = (gx-0.5)*ts, (gy-0.5)*ts
-    until dungeon:isWalkable(x, y)
+        attempts = attempts + 1
+        
+        -- If we can't find an off-screen position after many attempts,
+        -- just spawn at the edge of the screen
+        if attempts >= maxAttempts then
+            local side = math.random(4)
+            local w, h = love.graphics.getWidth(), love.graphics.getHeight()
+            local buffer = 150
+            
+            if side == 1 then -- top
+                x = playerX + math.random(-w/2, w/2)
+                y = playerY - h/2 - buffer
+            elseif side == 2 then -- bottom
+                x = playerX + math.random(-w/2, w/2)
+                y = playerY + h/2 + buffer
+            elseif side == 3 then -- left
+                x = playerX - w/2 - buffer
+                y = playerY + math.random(-h/2, h/2)
+            else -- right
+                x = playerX + w/2 + buffer
+                y = playerY + math.random(-h/2, h/2)
+            end
+            
+            -- Make sure it's walkable
+            if dungeon:isWalkable(x, y) then
+                break
+            end
+        end
+    until dungeon:isWalkable(x, y) and isOffScreen(x, y, playerX, playerY)
+    
     return x, y
 end
 
@@ -50,17 +98,20 @@ function Spawner:update(dt)
     if self.enemiesToSpawn > 0 then
         self.spawnTimer = self.spawnTimer - dt
         if self.spawnTimer <= 0 then
-            local Enemy = require("enemy")
             local typeDef = enemyTypes[math.random(#enemyTypes)]  -- pick random type
-            local e = Enemy:new(0, 0, typeDef.hp, typeDef.speed, typeDef.color, typeDef.type)
-            e:setDungeon(self.dungeon)
-            e:setTarget(self.player)
+            local e = EnemyModule:new(0, 0, typeDef.hp, typeDef.speed, typeDef.color, typeDef.type)
+            
+            if e then  -- Safety check
+                e:setDungeon(self.dungeon)
+                e:setTarget(self.player)
 
-            -- Spawn on a random walkable tile
-            local x, y = randomWalkablePosition(self.dungeon)
-            e.x, e.y = x, y
+                -- Spawn on a random walkable tile OFF-SCREEN
+                local x, y = randomOffScreenPosition(self.dungeon, self.player.x, self.player.y)
+                e.x, e.y = x, y
 
-            table.insert(self.enemies, e)
+                table.insert(self.enemies, e)
+            end
+            
             self.enemiesToSpawn = self.enemiesToSpawn - 1
             self.spawnTimer = self.spawnInterval
         end

@@ -1,6 +1,7 @@
 local Player = {}
 Player.__index = Player
 
+-- Constructor
 function Player:new(x, y, size)
     local p = {
         x = x,
@@ -14,46 +15,58 @@ function Player:new(x, y, size)
         attackDelay = 0.3,
         projectiles = {},
         hitTimer = 0,
-        hitDuration = 0.1
+        hitDuration = 0.1,
+        -- Stretch animation
+        stretchTimer = 0,
+        stretchSpeed = 12,
+        walkStretchAmount = 0.3,
+        breatheStretchAmount = 0.1,
+        isMoving = false
     }
     setmetatable(p, Player)
     return p
 end
 
+-- Set dungeon reference
 function Player:setDungeon(d)
     self.dungeon = d
 end
 
+-- Update player state each frame
 function Player:update(dt, enemies)
     local dx, dy = 0, 0
-    if love.keyboard.isDown("w") then dy = dy - 1 end
-    if love.keyboard.isDown("s") then dy = dy + 1 end
-    if love.keyboard.isDown("a") then dx = dx - 1 end
-    if love.keyboard.isDown("d") then dx = dx + 1 end
+
+    -- Movement: WASD + Arrow Keys
+    if love.keyboard.isDown("w", "up") then dy = dy - 1 end
+    if love.keyboard.isDown("s", "down") then dy = dy + 1 end
+    if love.keyboard.isDown("a", "left") then dx = dx - 1 end
+    if love.keyboard.isDown("d", "right") then dx = dx + 1 end
 
     local len = math.sqrt(dx*dx + dy*dy)
-    if len > 0 then
+    self.isMoving = len > 0
+
+    if self.isMoving then
         dx = dx / len * self.speed * dt
         dy = dy / len * self.speed * dt
     end
 
-    -- Move X with collision
+    -- Collision movement
     if self.dungeon:isWalkable(self.x + dx - self.size/2, self.y - self.size/2) and
        self.dungeon:isWalkable(self.x + dx + self.size/2, self.y - self.size/2) and
        self.dungeon:isWalkable(self.x + dx - self.size/2, self.y + self.size/2) and
-       self.dungeon:isWalkable(self.x + dx + self.size/2, self.y + self.size/2)
-    then
+       self.dungeon:isWalkable(self.x + dx + self.size/2, self.y + self.size/2) then
         self.x = self.x + dx
     end
 
-    -- Move Y with collision
     if self.dungeon:isWalkable(self.x - self.size/2, self.y + dy - self.size/2) and
        self.dungeon:isWalkable(self.x + self.size/2, self.y + dy - self.size/2) and
        self.dungeon:isWalkable(self.x - self.size/2, self.y + dy + self.size/2) and
-       self.dungeon:isWalkable(self.x + self.size/2, self.y + dy + self.size/2)
-    then
+       self.dungeon:isWalkable(self.x + self.size/2, self.y + dy + self.size/2) then
         self.y = self.y + dy
     end
+
+    -- Update stretch animation
+    self.stretchTimer = self.stretchTimer + dt * self.stretchSpeed
 
     -- Update attack cooldown
     if self.attackCooldown > 0 then
@@ -61,43 +74,26 @@ function Player:update(dt, enemies)
     end
 
     -- Update projectiles
-    if self.projectiles then
-        for i = #self.projectiles, 1, -1 do
-            local p = self.projectiles[i]
-            p.x = p.x + p.dx * dt
-            p.y = p.y + p.dy * dt
+    for i = #self.projectiles, 1, -1 do
+        local p = self.projectiles[i]
+        p.x = p.x + p.dx * dt
+        p.y = p.y + p.dy * dt
 
-            local remove = false
+        local remove = false
+        if not self.dungeon:isWalkable(p.x, p.y) then remove = true end
 
-            -- Remove projectile if it hits a wall
-            if not self.dungeon:isWalkable(p.x, p.y) then
-                remove = true
-            end
-
-            -- Check collision with enemies
-            if enemies then
-                for _, e in ipairs(enemies) do
-                    if math.abs(p.x - e.x) < (p.size + e.size)/2 and
-                       math.abs(p.y - e.y) < (p.size + e.size)/2 then
-                        e.hp = e.hp - 20
-                        remove = true
-                    end
+        if enemies then
+            for _, e in ipairs(enemies) do
+                if e.hp > 0 and math.abs(p.x - e.x) < (p.size + e.size)/2 and
+                   math.abs(p.y - e.y) < (p.size + e.size)/2 then
+                    e.hp = e.hp - 20
+                    remove = true
                 end
             end
-
-            if remove then
-                table.remove(self.projectiles, i)
-            end
         end
-    end
 
-    -- Update hit timer
-    if self.hitTimer > 0 then
-        self.hitTimer = self.hitTimer - dt
+        if remove then table.remove(self.projectiles, i) end
     end
-
-    -- Pickup any items
-    self:pickupItems()
 
     -- Update hit timer
     if self.hitTimer > 0 then
@@ -122,18 +118,36 @@ function Player:attack(mx, my)
             dy = dirY * 400,
             size = 4
         })
+
         self.attackCooldown = self.attackDelay
+
+        if Audio then Audio.play("attack_player") end
     end
 end
 
+-- Draw player and projectiles
 function Player:draw()
-    -- Draw player with flash if hit
+    local scaleX, scaleY = 1, 1
+    if self.isMoving then
+        local stretchFactor = math.sin(self.stretchTimer) * self.walkStretchAmount
+        scaleY = 1 + stretchFactor
+        scaleX = 1 - stretchFactor * 0.5
+    else
+        local breatheFactor = math.sin(self.stretchTimer * 0.5) * self.breatheStretchAmount
+        scaleX = 1 + breatheFactor
+        scaleY = 1 - breatheFactor * 0.3
+    end
+
+    local drawWidth = self.size * scaleX
+    local drawHeight = self.size * scaleY
+
     if self.hitTimer > 0 then
-        love.graphics.setColor(1,0,0)  -- flash red
+        love.graphics.setColor(1,0,0)
     else
         love.graphics.setColor(1,1,1)
     end
-    love.graphics.rectangle("fill", self.x - self.size/2, self.y - self.size/2, self.size, self.size)
+
+    love.graphics.rectangle("fill", self.x - drawWidth/2, self.y - drawHeight/2, drawWidth, drawHeight)
 
     -- Draw projectiles
     love.graphics.setColor(1,0.8,0)
@@ -141,7 +155,7 @@ function Player:draw()
         love.graphics.rectangle("fill", p.x - p.size/2, p.y - p.size/2, p.size, p.size)
     end
 
-    -- Health bar
+    -- Draw health bar
     local barW, barH = 40, 6
     love.graphics.setColor(0.4,0.4,0.4)
     love.graphics.rectangle("fill", self.x - barW/2, self.y - self.size/2 - 10, barW, barH)
@@ -150,34 +164,18 @@ function Player:draw()
     love.graphics.setColor(1,1,1)
 end
 
--- Take damage with hit flash
+-- Take damage
 function Player:damage(amount)
-    if self.hitTimer <= 0 then      -- only take damage if not in invincibility
+    if self.hitTimer <= 0 then
         self.hp = self.hp - amount
-        self.hitTimer = self.hitDuration  -- trigger hit flash / i-frames
+        self.hitTimer = self.hitDuration
+        if Audio then Audio.play("player_hurt") end
     end
 end
 
+-- Stub method for compatibility
 function Player:pickupItems()
-    if not self.dungeon or not self.dungeon.items then return end
-
-    for _, item in ipairs(self.dungeon.items) do
-        if not item.collected then
-            if math.abs(self.x - item.x) < (item.size + self.size) and
-               math.abs(self.y - item.y) < (item.size + self.size)
-            then
-                item.collected = true
-
-                if item.type == "consumable" then
-                    self.hp = math.min(self.maxHp, self.hp + item.amount)
-                elseif item.type == "key" then
-                    self.keys = (self.keys or 0) + 1
-                elseif item.type == "rare" then
-                    self.rareShards = (self.rareShards or 0) + 1
-                end
-            end
-        end
-    end
+    -- No-op: pickup handled in main.lua upgrades system
 end
 
 return Player

@@ -1,17 +1,21 @@
 # Twilight of Eryndor
 
-Twilight of Eryndor is a 2D dungeon crawler built entirely in Lua using the Love2D framework. Explore the ruins of the ancient kingdom of Eryndor, battle enemies, collect loot, and master the dual Light & Shadow skills to overcome puzzles and reach hidden areas.
+Twilight of Eryndor is a 2D roguelike dungeon crawler built in Lua using the Love2D framework. Battle through procedurally generated dungeons, face waves of enemies, collect powerful loot, and see how long you can survive!
 
 ---
 
 ## Features
 
-- **Procedurally Generated Dungeons** – Each playthrough offers new layouts, enemy placements, and loot.
-- **Combat System** – Engage enemies in melee or ranged combat with responsive controls.
-- **Enemy AI** – Enemies patrol, chase the player when spotted, and attack with cooldowns and telegraphs.
-- **Loot & Items** – Collect potions, weapons, and artifacts dropped by enemies to aid your journey.
-- **Boss Encounters** – Face floor bosses that challenge your combat skills and strategy.
-- **Smooth Camera** – Follow the player through the dungeon seamlessly.
+- **Procedurally Generated Dungeons** – Each playthrough offers unique layouts with connected rooms and corridors.
+- **Wave-Based Combat** – Face increasingly difficult waves of enemies that spawn off-screen and hunt you down.
+- **Three Enemy Types** – Battle melee bruisers, tanky juggernauts, and deadly ranged attackers, each with unique sizes and behaviors.
+- **Projectile Combat** – Click to fire projectiles at enemies. Aim carefully and dodge incoming attacks!
+- **Enemy AI** – Enemies patrol when idle, chase when they spot you, and use telegraphed attacks before striking.
+- **Animated Sprites** – Characters squash and stretch as they move, and breathe while idle for a lively feel.
+- **Death Animations** – Enemies burst into particles when defeated, with satisfying visual feedback.
+- **Diverse Loot System** – Collect health orbs, speed boosts, health potions, mana potions, and rare shards that drop from defeated enemies.
+- **Progressive Difficulty** – Enemy waves grow larger and drop rates increase as you survive longer.
+- **Smooth Camera** – The camera follows the player seamlessly through the dungeon.
 
 ---
 
@@ -37,12 +41,26 @@ love .\TwilightOfEryndor-LuaGame\
 | Action            | Key / Button      |
 | ----------------- | ----------------- |
 | Move              | Arrow Keys / WASD |
-| Use Light Skill   | L                 |
-| Use Shadow Skill  | K                 |
-| Attack / Interact | E / Left Click    |
-| Pause             | Esc               |
+| Use Light Skill   | Left Click        |
+| Restart           | R (on deth)       |
 
-(Controls can be customized in controls.lua.)
+---
+
+## Enemy Types
+
+- **Melee (Red)** – Medium size, fast, moderate damage. Gets up close to strike.
+- **Tank (Orange)** – Large and slow, high HP, devastating area-of-effect attacks.
+- **Ranged (Green)** – Small and quick, low HP, shoots projectiles from a distance.
+
+---
+
+## Loot Items
+
+- **Health Orb (Light Blue)** – Restores 30 HP
+- **Speed Boost (Turquoise)** – Permanently increases movement speed
+- **Health Potion (Cyan)** – Restores 25 HP
+- **Mana Potion (Blue)** – Restores 15 HP (placeholder effect)
+- **Rare Shard (Purple)** – Increases max HP by 10 (rare drop!)
 
 ---
 
@@ -50,35 +68,56 @@ love .\TwilightOfEryndor-LuaGame\
 
 ```bash
 TwilightOfEryndor-LuaGame/
-├── main.lua          # Game entry point
+├── main.lua          # Game entry point and main loop
 ├── conf.lua          # Love2D configuration
-├── player.lua        # Player logic and skill mechanics
+├── player.lua        # Player logic, movement, and combat
 ├── dungeon.lua       # Procedural dungeon generation
-├── enemy.lua         # Enemy AI and behaviors
-├── items.lua         # Loot, potions, and artifacts
-├── spawner.lua       # Logic to randomly spawn enemies in a dungeon and increase waves overt time
-├── rooms.lua         # Room layouts and puzzle logic
-├── assets/           # Sprites, audio, and tiles
+├── enemy.lua         # Enemy AI, behaviors, and animations
+├── items.lua         # Loot definitions and item database
+├── spawner.lua       # Wave-based enemy spawning system
+├── camera.lua        # Smooth camera following system
 └── README.md         # This file
 ```
 
 ---
 
+## GamePlay Tips
+
+- **Keep Moving** – Standing still makes you an easy target!
+- **Use the Dungeon** – Hide behind walls and break line of sight with ranged enemies.
+- **Collect Rare Shards** – They permanently increase your max HP, making later waves easier.
+- **Watch for Telegraphs** – Enemies show visual indicators before attacking. Dodge them!
+- **Speed Stacks** – Multiple speed boosts make you incredibly fast. Collect them all!
+
+---
+
 ## Roadmap
 
-- [x] Implement multiple enemy types (melee, ranged) with unique stats.
-- [x] Ensure enemy patrolling, chasing, and attacks work correctly.
-- [x] Add player combat feedback: damage indicators and health system.
-- [x] Improve procedural dungeon generation and connectivity.
-- [ ] Place enemies and loot only on walkable tiles.
-- [ ] Design floor bosses with unique movement and attack patterns.
-- [x] Implement telegraphed attacks.
-- [ ] Drop rare items or keys upon defeat.
-- [ ] Particle effects for attacks and deaths.
-- [x] Camera smoothing and subtle visual polish.
-- [ ] Sound effects for player actions, enemy attacks, and pickups (optional).
-- [ ] Add obstacles and environmental hazards (optional).
-- [ ] Ambient music or environmental sounds (optional).
+- [x] Implement multiple enemy types (melee, tank, ranged) with unique stats and sizes.
+- [x] Enemy patrolling, chasing, and telegraphed attacks.
+- [x] Player projectile combat with collision detection.
+- [x] Health system with damage indicators and i-frames.
+- [x] Procedural dungeon generation with line-of-sight checks.
+- [x] Wave-based spawning system with off-screen enemy placement.
+- [x] Diverse loot system with multiple item types.
+- [x] Squash and stretch animations for movement and idle states.
+- [x] Death particle effects for enemies.
+- [x] Progressive difficulty scaling with waves.
+- [ ] Boss encounters with unique mechanics.
+- [ ] More enemy variety and attack patterns.
+- [ ] Player upgrades and permanent progression.
+- [ ] Sound effects for attacks, hits, and item pickups.
+- [ ] Background music and ambient sounds.
+- [ ] Environmental hazards and traps.
+- [ ] Mini-map or dungeon overview.
+- [ ] Score tracking and high scores.
+
+---
+
+## Known Issues
+
+- Enemies may occasionally spawn in walls if dungeon generation creates tight spaces.
+- Performance may drop with 50+ active enemies on screen.
 
 ---
 
@@ -86,10 +125,9 @@ TwilightOfEryndor-LuaGame/
 
 - Love2D – https://love2d.org/
 - Placeholder assets & free resources (sprites, audio) – properly credited in /assets/credits.txt
+- Development: Solo project
 
 ---
 
-## Credits
-
-- Love2D – https://love2d.org/
-- Placeholder assets & free resources (sprites, audio) – properly credited in /assets/credits.txt
+## License
+This project is open source. Feel free to fork, modify, and learn from it!

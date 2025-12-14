@@ -11,16 +11,16 @@ local Items = require("items")
 
 -- Game state
 local dungeon, player, spawner, camera
-local isDead = false
-local isVictory = false  -- New: victory state for 110 shards
+local isDead = false                        -- Tracks player death
+local isVictory = false                      -- Tracks ultimate completion (110+ shards)
 local deathMessage = ""
-local survivalTime = 0
-local endingTitle = ""
-local endingDescription = ""
+local survivalTime = 0                      -- Total playtime in seconds
+local endingTitle = ""                      -- Title for ending screen
+local endingDescription = ""                -- Description for ending screen
 
-local upgrades = {}
-local pickupMessages = {}
-local storyMessages = {}
+local upgrades = {}                         -- Currently spawned pickup items
+local pickupMessages = {}                   -- Temporary HUD messages for pickups
+local storyMessages = {}                    -- Temporary HUD messages for pickups
 
 -- Lore-based endings for every 10 shards
 local endings = {
@@ -74,18 +74,21 @@ local endings = {
     }
 }
 
+-- Get ending tier based on shard count
 local function getEnding(shardCount)
     local tier = math.floor(shardCount / 10)
     if tier > 11 then tier = 11 end
     return endings[tier]
 end
 
+-- Format time as MM:SS for HUD
 local function formatTime(seconds)
     local mins = math.floor(seconds / 60)
     local secs = math.floor(seconds % 60)
     return string.format("%02d:%02d", mins, secs)
 end
 
+-- Spawn an upgrade/pickup in the world
 local function spawnUpgrade(type, x, y)
     local itemData = Items.database[type]
     if itemData then
@@ -111,21 +114,26 @@ local function addStoryMessage(text)
 end
 
 function love.load()
-    math.randomseed(os.time())
+    math.randomseed(os.time())          -- Random seed for procedural dungeon/enemy spawns
     Audio.load()
     Audio.playMusic("bg")
 
+    -- Generate dungeon
     dungeon = Dungeon:new({gridW=50, gridH=50, tileSize=32, maxAttempts=8, minFloorFraction=0.28, pruneDeadEnds=true})
+
+    -- Create player at starting location
     local px, py = dungeon:getPlayerStart()
     player = Player:new(px, py, 16)
     player:setDungeon(dungeon)
 
+    -- Initialize enemy spawner and camera
     spawner = Spawner:new(dungeon, player)
     camera = Camera:new(px, py)
     if dungeon.mapWidth and dungeon.mapHeight then
         camera:setBounds(0, 0, dungeon.mapWidth, dungeon.mapHeight)
     end
     
+    -- Reset gameplay variables
     survivalTime = 0
     player.rareShards = 0
     isDead = false
@@ -134,13 +142,13 @@ end
 
 function love.update(dt)
     if not isDead and not isVictory then
-        survivalTime = survivalTime + dt
+        survivalTime = survivalTime + dt    -- Track survival time
         
         player:update(dt, spawner.enemies)
         spawner:update(dt)
         hud:update(dt)
 
-        -- Check for ultimate victory (110+ shards)
+        -- Check for victory (110+ shards)
         if player.rareShards >= 110 then
             isVictory = true
             local ending = getEnding(player.rareShards)
@@ -149,22 +157,28 @@ function love.update(dt)
             Audio.play("button")
         end
 
+        -- Update and remove expired pickup messages
         for i=#pickupMessages,1,-1 do
             pickupMessages[i].timer = pickupMessages[i].timer - dt
             if pickupMessages[i].timer <= 0 then table.remove(pickupMessages,i) end
         end
         
+        -- Update and remove expired story messages
         for i=#storyMessages,1,-1 do
             storyMessages[i].timer = storyMessages[i].timer - dt
             if storyMessages[i].timer <= 0 then table.remove(storyMessages,i) end
         end
 
+        -- Update enemies
         for i=#spawner.enemies,1,-1 do
             local e = spawner.enemies[i]
+
+            -- Handle death animation & loot drops
             if e.isDying and e.deathTimer >= e.deathDuration then
                 Audio.play("enemy_death")
                 hud:addKill()
 
+                -- Loot drop chance scales with wave
                 local baseChance = 0.5
                 local perWaveBonus = 0.05
                 local dropChance = math.min(0.95, baseChance + spawner.wave * perWaveBonus)
@@ -185,10 +199,12 @@ function love.update(dt)
             end
         end
 
+        -- Handle player pickups
         for i=#upgrades,1,-1 do
             local u = upgrades[i]
             if math.abs(player.x-u.x) < (player.size+u.size)/2 and
                math.abs(player.y-u.y) < (player.size+u.size)/2 then
+                -- Apply effects based on item type
                 if u.type=="health_potion" then
                     player.hp = math.min(player.maxHp, player.hp + (u.amount or 25))
                     addPickupMessage(u.pickupMessage or "+HP restored")
@@ -206,6 +222,7 @@ function love.update(dt)
             end
         end
 
+        -- Handle player death
         if player.hp <= 0 and not isDead then
             Audio.play("player_hurt")
             isDead = true
@@ -214,8 +231,10 @@ function love.update(dt)
             endingDescription = ending.desc
         end
 
+        -- Update camera position to follow player
         camera:update(player.x,player.y)
     else
+        -- Allow restart when dead or victorious
         if love.keyboard.isDown("r") then
             Audio.play("button")
             love.event.quit("restart")
@@ -229,23 +248,27 @@ function love.draw()
         dungeon:draw()
         spawner:draw()
 
+        -- Draw upgrades/pickups
         for _, u in ipairs(upgrades) do
             if u.color then love.graphics.setColor(u.color[1],u.color[2],u.color[3]) end
             love.graphics.circle("fill", u.x, u.y, u.size/2)
         end
 
+        -- Draw enemies
         for _, e in ipairs(spawner.enemies) do e:draw() end
         player:draw()
         camera:detach()
 
         hud:draw()
 
+        -- Draw pickup messages on right-hand side
         local startY = 20
         for i,msg in ipairs(pickupMessages) do
             love.graphics.setColor(1,1,0)
             love.graphics.printf(msg.text,0,startY+(i-1)*20,love.graphics.getWidth()-10,"right")
         end
 
+        -- Draw story messages near bottom-left
         local startY = love.graphics.getHeight()-60
         for i,msg in ipairs(storyMessages) do
             love.graphics.setColor(0.8,0.8,1)
@@ -253,44 +276,47 @@ function love.draw()
         end
         love.graphics.setColor(1,1,1)
     else
-        -- Game over screen (death or victory)
+        -- Death or victory screen
         local centerY = love.graphics.getHeight() / 2
         
-        -- Title color: gold for victory, white for death
+        -- Title
         if isVictory then
-            love.graphics.setColor(1, 0.9, 0.2)
+            love.graphics.setColor(0.929, 0.882, 0.620)  -- #ede19e light yellow
         else
-            love.graphics.setColor(1, 0.8, 0.3)
+            love.graphics.setColor(0.898, 0.808, 0.706)  -- #e5ceb4 light tan
         end
         love.graphics.printf(endingTitle, 0, centerY - 100, love.graphics.getWidth(), "center")
         
         -- Description
-        love.graphics.setColor(0.9, 0.9, 0.9)
+        love.graphics.setColor(0.722, 0.710, 0.725)  -- #b8b5b9 light gray
         love.graphics.printf(endingDescription, 50, centerY - 60, love.graphics.getWidth() - 100, "center")
         
         -- Stats
-        love.graphics.setColor(1, 1, 1)
+        love.graphics.setColor(0.949, 0.941, 0.898)  -- #f2f0e5 cream
         love.graphics.printf("Time Survived: " .. formatTime(survivalTime), 0, centerY + 40, love.graphics.getWidth(), "center")
         
-        love.graphics.setColor(0.6, 0.2, 1)
+        -- Shard count
+        love.graphics.setColor(0.812, 0.541, 0.796)  -- #cf8acb pink
         love.graphics.printf("Rare Shards Collected: " .. (player.rareShards or 0), 0, centerY + 65, love.graphics.getWidth(), "center")
         
-        -- Special message for ultimate completion
+        -- Special completion message
         if isVictory then
-            love.graphics.setColor(1, 1, 0.3)
+            love.graphics.setColor(0.929, 0.882, 0.620)  -- #ede19e light yellow
             love.graphics.printf("★ ULTIMATE COMPLETION ★", 0, centerY + 95, love.graphics.getWidth(), "center")
-            love.graphics.setColor(0.8, 0.8, 0.8)
+            love.graphics.setColor(0.761, 0.827, 0.408)  -- #c2d368 lime green
             love.graphics.printf("The ruins of Eryndor have nothing left to give.", 0, centerY + 120, love.graphics.getWidth(), "center")
         end
         
         -- Restart instruction
-        love.graphics.setColor(0.7, 0.7, 0.7)
+        love.graphics.setColor(0.525, 0.506, 0.533)  -- #868188 medium gray
         love.graphics.printf("Press R to restart", 0, centerY + 150, love.graphics.getWidth(), "center")
     end
 end
 
+-- Handle mouse clicks for player attacks
 function love.mousepressed(x,y,button)
     if button==1 and not isDead and not isVictory then
+        -- Convert screen coordinates to world coordinates
         local wx = x + camera.x - love.graphics.getWidth()/2
         local wy = y + camera.y - love.graphics.getHeight()/2
         player:attack(wx,wy)

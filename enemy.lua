@@ -1,16 +1,16 @@
 local Enemy = {}
 local Items = require("items")
-local Audio = require("audio")  -- ADD AUDIO
+local Audio = require("audio")
 Enemy.__index = Enemy
 
--- On-screen check
+-- Checks whether an enemy is within the camera view
 local function isOnScreen(x, y, cam)
     local w, h = love.graphics.getWidth(), love.graphics.getHeight()
     return x > cam.x - w/2 and x < cam.x + w/2 and
            y > cam.y - h/2 and y < cam.y + h/2
 end
 
--- Check if the entire enemy square can move to (x, y)
+-- Ensures the ENTIRE enemy square can move to a position
 local function canMoveTo(self, x, y)
     local half = self.size / 2
     return self.dungeon:isWalkable(x - half, y - half) and
@@ -19,9 +19,8 @@ local function canMoveTo(self, x, y)
            self.dungeon:isWalkable(x + half, y + half)
 end
 
--- Constructor
 function Enemy:new(x, y, hp, speed, color, type, patrolPath)
-    -- Set size based on type
+    -- Different enemy types feel heavier/lighter via size
     local sizeMap = {
         tank = 24,      -- biggest
         melee = 18,     -- slightly bigger than player
@@ -35,26 +34,34 @@ function Enemy:new(x, y, hp, speed, color, type, patrolPath)
         hp = hp or 30,
         maxHp = hp or 30,
         speed = speed or 80,
-        dungeon = nil,
-        target = nil,
+
+        dungeon = nil,  -- reference to map for collision & LOS
+        target = nil,   -- the player
+
         type = type or "melee",
         color = color or {1,0,0},
+
         patrolPath = patrolPath or {},
         patrolIndex = 1,
-        moveDir = {x=0, y=0},
+
+        moveDir = {x=0, y=0}, -- direction vector for animation
         chasing = false,
-        attackCooldown = 1.5,
-        attackTelegraph = 0,
+
+        attackCooldown = 1.5,   -- prevents constant attacks
+        attackTelegraph = 0,    -- visual warning before attacking
         telegraphDuration = 0.5,
         telegraphX = 0,
         telegraphY = 0,
-        projectiles = {},
+
+        projectiles = {},   -- used by ranged enemies
+
         -- Stretch animation
         stretchTimer = 0,
         stretchSpeed = 12,
         walkStretchAmount = 0.25,
         breatheStretchAmount = 0.12,
         isMoving = false,
+        
         -- Death animation
         isDying = false,
         deathTimer = 0,
@@ -70,11 +77,11 @@ function Enemy:setTarget(p) self.target = p end
 
 -- Chase player if visible, else patrol
 function Enemy:update(dt)
-    -- Handle death animation
+    -- If dying play death animation
     if self.isDying then
         self.deathTimer = self.deathTimer + dt
         
-        -- Update death particles
+        -- Move and fade death particles outward
         for i = #self.deathParticles, 1, -1 do
             local p = self.deathParticles[i]
             p.x = p.x + p.vx * dt
@@ -90,6 +97,7 @@ function Enemy:update(dt)
         return
     end
     
+    -- If HP just hit zero, START death animation
     if self.hp <= 0 then
         self:startDeathAnimation()
         return
@@ -97,7 +105,7 @@ function Enemy:update(dt)
 
     local half = self.size / 2
 
-    -- Check if chasing player
+    -- Enemy can only chase if it has line-of-sight to the player
     local chasing = false
     if self.target then
         chasing = self.dungeon:lineOfSight(self.x, self.y, self.target.x, self.target.y)
@@ -107,14 +115,23 @@ function Enemy:update(dt)
 
     if chasing then
         self.chasing = true
+
+        -- Vector toward the player
         local dx, dy = self.target.x - self.x, self.target.y - self.y
         local dist = math.sqrt(dx*dx + dy*dy)
+
+        -- Different enemy types stop at different distances
         local stopDist = (self.type=="melee" and self.size + self.target.size + 8)
                        or (self.type=="tank" and self.size + self.target.size + 8)
                        or 50
+        
+        -- Only move if outside attack range
         if dist > stopDist then
-            local nx, ny = dx/dist, dy/dist
+            local nx, ny = dx/dist, dy/dist -- normalized direction
+
+            -- Try X and Y movement separately to allow sliding
             local nextX, nextY = self.x + nx*self.speed*dt, self.y + ny*self.speed*dt
+
             if canMoveTo(self, nextX, self.y) then 
                 self.x = nextX
                 self.isMoving = true
@@ -125,12 +142,14 @@ function Enemy:update(dt)
             end
             self.moveDir = {x=nx, y=ny}
         else
+            -- Stop moving when in attack range
             self.moveDir = {x=0, y=0}
         end
     else
-        -- Patrol / wander
+        -- If player is not visible, wander randomly
         self.chasing = false
 
+        -- Generate a patrol target if none exists
         if #self.patrolPath == 0 then
             local ts = self.dungeon.tileSize or 32
             local rx = math.random(1, self.dungeon.gridW) * ts
@@ -143,6 +162,7 @@ function Enemy:update(dt)
         local dist = math.sqrt(dx*dx + dy*dy)
 
         if dist < 4 then
+            -- Pick a new random patrol point once reached
             local ts = self.dungeon.tileSize or 32
             local rx = math.random(1, self.dungeon.gridW) * ts
             local ry = math.random(1, self.dungeon.gridH) * ts
@@ -163,6 +183,7 @@ function Enemy:update(dt)
                 self.isMoving = true
             end
 
+            -- If blocked by walls, reroll patrol target
             if not moved then
                 local ts = self.dungeon.tileSize or 32
                 local rx = math.random(1, self.dungeon.gridW) * ts
@@ -173,7 +194,8 @@ function Enemy:update(dt)
             self.moveDir = {x=nx, y=ny}
         end
     end
-    
+
+     -- Drives animation
     self.stretchTimer = self.stretchTimer + dt * self.stretchSpeed
 end
 
@@ -295,22 +317,30 @@ function Enemy:draw()
         drawHeight)
 
     if self.attackTelegraph > 0 then
+        -- Make color lighter by multiplying RGB by 1.5 and capping at 1.0
+        local lightR = math.min(self.color[1] * 1.5, 1.0)
+        local lightG = math.min(self.color[2] * 1.5, 1.0)
+        local lightB = math.min(self.color[3] * 1.5, 1.0)
+        
         if self.type=="melee" then
-            love.graphics.setColor(1,0,0,0.5)
+            love.graphics.setColor(lightR, lightG, lightB, 0.6)
             local angle = math.atan2(self.target.y - self.y, self.target.x - self.x)
             local radius = self.size + (self.target and self.target.size or 0) + 6
             love.graphics.arc("fill", self.x, self.y, radius, angle - 0.6, angle + 0.6)
         elseif self.type=="tank" then
-            love.graphics.setColor(1,0.5,0,0.5)
+            love.graphics.setColor(lightR, lightG, lightB, 0.5)
             love.graphics.circle("fill", self.x, self.y, self.size*3)
         elseif self.type=="ranged" then
-            love.graphics.setColor(1,1,0,0.5)
+            love.graphics.setColor(lightR, lightG, lightB, 0.6)
             love.graphics.circle("fill", self.telegraphX, self.telegraphY, 14)
         end
     end
 
     if self.type=="ranged" then
-        love.graphics.setColor(1,1,0)
+        local lightR = math.min(self.color[1] * 1.3, 1.0)
+        local lightG = math.min(self.color[2] * 1.3, 1.0)
+        local lightB = math.min(self.color[3] * 1.3, 1.0)
+        love.graphics.setColor(lightR, lightG, lightB)
         for _, p in ipairs(self.projectiles) do
             love.graphics.rectangle("fill", p.x-p.size/2, p.y-p.size/2, p.size, p.size)
         end

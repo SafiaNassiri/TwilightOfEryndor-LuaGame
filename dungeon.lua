@@ -2,10 +2,6 @@ local Dungeon = {}
 Dungeon.__index = Dungeon
 local love = love
 
----------------------------------------------
--- UTILITY FUNCTIONS
----------------------------------------------
-
 -- Generate random integer between a and b (inclusive)
 local function randInt(a, b) return math.random(a, b) end
 
@@ -14,11 +10,8 @@ local function insideGrid(g, x, y)
     return x >= 1 and x <= g.gridW and y >= 1 and y <= g.gridH
 end
 
----------------------------------------------
--- PRUNE DEAD ENDS
 -- Removes corridors that only connect to one other tile
 -- This creates more interesting layouts by removing useless branches
----------------------------------------------
 function Dungeon:pruneDeadEndsFunc()
     local changed = true
     
@@ -49,11 +42,8 @@ function Dungeon:pruneDeadEndsFunc()
     end
 end
 
----------------------------------------------
--- CONNECT DISJOINT AREAS
 -- Ensures all walkable areas are connected using flood fill
 -- This prevents isolated rooms/sections
----------------------------------------------
 function Dungeon:connectDisjointAreas()
     local regionId = {}  -- Stores which region each tile belongs to
     local currentId = 0  -- Counter for region IDs
@@ -151,24 +141,21 @@ function Dungeon:connectDisjointAreas()
     end
 end
 
----------------------------------------------
--- CONSTRUCTOR
 -- Creates a new dungeon with procedural generation
----------------------------------------------
 function Dungeon:new(opts)
     opts = opts or {}
     local d = {
-        gridW = opts.gridW or 50,                      -- Grid width in tiles
-        gridH = opts.gridH or 50,                      -- Grid height in tiles
-        tileSize = opts.tileSize or 32,                -- Pixel size of each tile
-        tiles = {},                                    -- 2D array: 0=wall, 1=floor
-        rooms = {},                                    -- List of rectangular rooms
-        floorList = {},                                -- All floor tile positions
-        generated = false,                             -- Success flag
-        maxAttempts = opts.maxAttempts or 8,           -- Retries if generation fails
-        minFloorFraction = opts.minFloorFraction or 0.35,  -- Minimum floor % required
+        gridW = opts.gridW or 50,                           -- Grid width in tiles
+        gridH = opts.gridH or 50,                           -- Grid height in tiles
+        tileSize = opts.tileSize or 32,                     -- Pixel size of each tile
+        tiles = {},                                         -- 2D array: 0=wall, 1=floor
+        rooms = {},                                         -- List of rectangular rooms
+        floorList = {},                                     -- All floor tile positions
+        generated = false,                                  -- Success flag
+        maxAttempts = opts.maxAttempts or 8,                -- Retries if generation fails
+        minFloorFraction = opts.minFloorFraction or 0.35,   -- Minimum floor % required
         pruneDeadEnds = opts.pruneDeadEnds == nil and false or opts.pruneDeadEnds,
-        MAX_ROOMS = opts.MAX_ROOMS or 18               -- Maximum number of rooms
+        MAX_ROOMS = opts.MAX_ROOMS or 18                    -- Maximum number of rooms
     }
     setmetatable(d, Dungeon)
 
@@ -186,7 +173,7 @@ function Dungeon:new(opts)
         d:connectDisjointAreas()     -- Connect isolated sections
         
         if d.pruneDeadEnds then 
-            d:pruneDeadEndsFunc()    -- Optional: remove dead-end corridors
+            d:pruneDeadEndsFunc()    -- remove dead-end corridors
         end
         
         -- Check if dungeon meets quality standards
@@ -207,10 +194,7 @@ function Dungeon:new(opts)
     return d
 end
 
----------------------------------------------
--- CLEAR GRID
 -- Resets entire grid to walls (0)
----------------------------------------------
 function Dungeon:clear()
     self.rooms = {}
     self.floorList = {}
@@ -225,10 +209,7 @@ function Dungeon:clear()
     end
 end
 
----------------------------------------------
--- CARVE RECTANGLE
 -- Turns a rectangular area into floor tiles
----------------------------------------------
 function Dungeon:carveRect(cx, cy, w, h)
     -- Clamp to grid bounds
     local x0 = math.max(1, cx)
@@ -244,10 +225,7 @@ function Dungeon:carveRect(cx, cy, w, h)
     end
 end
 
----------------------------------------------
--- PLACE ROOMS
 -- Randomly places rectangular rooms that don't overlap
----------------------------------------------
 function Dungeon:placeRooms()
     local attempts = self.MAX_ROOMS * 3  -- Try 3x as many times as max rooms
     
@@ -282,10 +260,7 @@ function Dungeon:placeRooms()
     end
 end
 
----------------------------------------------
--- GENERATE MAZE
 -- Creates maze-like corridors using random walkers
----------------------------------------------
 function Dungeon:generateMaze()
     local walkers = randInt(2, 4)  -- 2-4 simultaneous walkers
     local lifespan = math.floor((self.gridW * self.gridH) / 200)  -- Steps per walker
@@ -310,10 +285,7 @@ function Dungeon:generateMaze()
     end
 end
 
----------------------------------------------
--- CONNECT ROOMS TO MAZE
 -- Ensures each room has a corridor leading to the maze
----------------------------------------------
 function Dungeon:connectRoomsToMaze()
     for _, room in ipairs(self.rooms) do
         -- Start from room center
@@ -376,10 +348,7 @@ function Dungeon:connectRoomsToMaze()
     end
 end
 
----------------------------------------------
--- RANDOM WALK OVERLAY
 -- Adds organic, winding corridors for variety
----------------------------------------------
 function Dungeon:applyRandomWalkOverlay()
     local walkers = randInt(3, 6)  -- 3-6 walkers
     local lifespan = math.floor((self.gridW * self.gridH) / 50)
@@ -402,11 +371,8 @@ function Dungeon:applyRandomWalkOverlay()
     end
 end
 
----------------------------------------------
--- BUILD FLOOR LIST
 -- Creates cached list of all floor tile positions
 -- Used for fast random spawning
----------------------------------------------
 function Dungeon:buildFloorList()
     self.floorList = {}
     for y = 1, self.gridH do
@@ -420,12 +386,9 @@ function Dungeon:buildFloorList()
     end
 end
 
----------------------------------------------
--- VALIDATE DUNGEON
--- Checks if dungeon meets minimum quality standards:
--- 1. Has enough floor tiles (min 35%)
--- 2. All floor is connected (at least 80% reachable)
----------------------------------------------
+-- Checks if dungeon meets minimum quality standard:
+-- Has enough floor tiles (min 35%)
+-- All floor is connected (at least 80% reachable)
 function Dungeon:validate()
     local startx, starty = nil, nil
     local floorCount = 0
@@ -474,11 +437,8 @@ function Dungeon:validate()
     return (seen / floorCount) >= 0.80
 end
 
----------------------------------------------
--- GET PLAYER START POSITION
 -- Returns coordinates for player spawn
 -- Prefers center of first room, falls back to first floor tile
----------------------------------------------
 function Dungeon:getPlayerStart()
     -- Spawn in center of first room if rooms exist
     if #self.rooms > 0 then
@@ -494,14 +454,11 @@ function Dungeon:getPlayerStart()
         return f.x + self.tileSize/2, f.y + self.tileSize/2
     end
     
-    -- Last resort: center of map (shouldn't happen with valid dungeon)
+    -- Center of map (shouldn't happen with valid dungeon)
     return math.floor(self.mapWidth/2), math.floor(self.mapHeight/2)
 end
 
----------------------------------------------
--- IS WALKABLE
 -- Checks if pixel coordinates are on a floor tile
----------------------------------------------
 function Dungeon:isWalkable(px, py)
     -- Convert pixel coordinates to grid coordinates
     local tx = math.floor(px / self.tileSize) + 1
@@ -514,11 +471,8 @@ function Dungeon:isWalkable(px, py)
     return self.tiles[ty][tx] == 1
 end
 
----------------------------------------------
--- LINE OF SIGHT
 -- Checks if there's a clear path between two points
 -- Used for enemy vision and projectile collision
----------------------------------------------
 function Dungeon:lineOfSight(x1, y1, x2, y2)
     local dx = x2 - x1
     local dy = y2 - y1
@@ -549,10 +503,7 @@ function Dungeon:lineOfSight(x1, y1, x2, y2)
     return true  -- Clear line of sight!
 end
 
----------------------------------------------
--- DEBUG DRAWING
 -- Shows room outlines and info (for development)
----------------------------------------------
 function Dungeon:drawDebug()
     -- Draw red outlines around rooms
     love.graphics.setColor(1,0,0,0.5)
@@ -570,10 +521,7 @@ function Dungeon:drawDebug()
     love.graphics.print("DEBUG MODE\nRooms: "..#self.rooms, 10, 10)
 end
 
----------------------------------------------
--- DRAW DUNGEON
 -- Renders the entire dungeon
----------------------------------------------
 function Dungeon:draw(showDebug)
     -- Draw floor tiles (dark blue)
     love.graphics.setColor(0.227, 0.220, 0.345)  -- #3a3858

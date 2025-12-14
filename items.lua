@@ -12,12 +12,12 @@ Items.database = {
     },
     ["mana_potion"] = {
         name = "Mana Potion",
-        type = "consumable",
-        amount = 15,  -- Changed: now heals 15 HP instead of speed boost
-        speedIncrease = 0,  -- Removed speed boost
+        type = "upgrade",
+        amount = 0,
+        speedIncrease = 20,  -- Slower speed boost (+20 instead of +50)
         color = {0, 0.5, 1},  -- Blue
         size = 12,
-        pickupMessage = "+15 HP restored",
+        pickupMessage = "Speed increased!",
         story = nil
     },
     ["rare_shard"] = {

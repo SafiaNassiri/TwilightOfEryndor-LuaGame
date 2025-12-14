@@ -193,7 +193,7 @@ function love.update(dt)
                     player.hp = math.min(player.maxHp, player.hp + (u.amount or 25))
                     addPickupMessage(u.pickupMessage or "+HP restored")
                 elseif u.type=="mana_potion" then
-                    player.hp = math.min(player.maxHp, player.hp + (u.amount or 15))
+                    player.speed = player.speed + (u.speedIncrease or 50)
                     addPickupMessage(u.pickupMessage or "Mana pool increased")
                 elseif u.type=="rare_shard" then
                     player.rareShards = (player.rareShards or 0) + 1

@@ -1,5 +1,6 @@
 local Enemy = {}
 local Items = require("items")
+local Audio = require("audio")  -- ADD AUDIO
 Enemy.__index = Enemy
 
 -- On-screen check
@@ -51,8 +52,8 @@ function Enemy:new(x, y, hp, speed, color, type, patrolPath)
         -- Stretch animation
         stretchTimer = 0,
         stretchSpeed = 12,
-        walkStretchAmount = 0.25,   -- how much to stretch when walking (25%)
-        breatheStretchAmount = 0.12, -- how much to stretch when breathing (12%)
+        walkStretchAmount = 0.25,
+        breatheStretchAmount = 0.12,
         isMoving = false,
         -- Death animation
         isDying = false,
@@ -67,9 +68,7 @@ end
 function Enemy:setDungeon(d) self.dungeon = d end
 function Enemy:setTarget(p) self.target = p end
 
--------------------------------------------------------------------
--- MOVEMENT: chase player if visible, else patrol
--------------------------------------------------------------------
+-- Chase player if visible, else patrol
 function Enemy:update(dt)
     -- Handle death animation
     if self.isDying then
@@ -81,7 +80,7 @@ function Enemy:update(dt)
             p.x = p.x + p.vx * dt
             p.y = p.y + p.vy * dt
             p.life = p.life - dt
-            p.alpha = p.life / 0.6  -- fade out
+            p.alpha = p.life / 0.6
             
             if p.life <= 0 then
                 table.remove(self.deathParticles, i)
@@ -92,7 +91,6 @@ function Enemy:update(dt)
     end
     
     if self.hp <= 0 then
-        -- Start death animation (loot dropping is handled in main.lua)
         self:startDeathAnimation()
         return
     end
@@ -133,7 +131,6 @@ function Enemy:update(dt)
         -- Patrol / wander
         self.chasing = false
 
-        -- Ensure patrol path exists
         if #self.patrolPath == 0 then
             local ts = self.dungeon.tileSize or 32
             local rx = math.random(1, self.dungeon.gridW) * ts
@@ -141,13 +138,11 @@ function Enemy:update(dt)
             table.insert(self.patrolPath, {x=rx, y=ry})
         end
 
-        -- Move toward current patrol target
         local target = self.patrolPath[self.patrolIndex]
         local dx, dy = target.x - self.x, target.y - self.y
         local dist = math.sqrt(dx*dx + dy*dy)
 
         if dist < 4 then
-            -- Arrived at patrol point, pick a new random one
             local ts = self.dungeon.tileSize or 32
             local rx = math.random(1, self.dungeon.gridW) * ts
             local ry = math.random(1, self.dungeon.gridH) * ts
@@ -168,7 +163,6 @@ function Enemy:update(dt)
                 self.isMoving = true
             end
 
-            -- If hit wall, pick a new patrol target
             if not moved then
                 local ts = self.dungeon.tileSize or 32
                 local rx = math.random(1, self.dungeon.gridW) * ts
@@ -180,18 +174,14 @@ function Enemy:update(dt)
         end
     end
     
-    -- Update stretch animation
     self.stretchTimer = self.stretchTimer + dt * self.stretchSpeed
 end
 
--------------------------------------------------------------------
 -- DEATH ANIMATION
--------------------------------------------------------------------
 function Enemy:startDeathAnimation()
     self.isDying = true
     self.deathTimer = 0
     
-    -- Create burst of particles
     local numParticles = 8
     for i = 1, numParticles do
         local angle = (i / numParticles) * math.pi * 2
@@ -208,9 +198,7 @@ function Enemy:startDeathAnimation()
     end
 end
 
--------------------------------------------------------------------
 -- ATTACK
--------------------------------------------------------------------
 function Enemy:attack(dt, cam)
     if self.hp <= 0 or not self.target or self.isDying then return end
     if not isOnScreen(self.x, self.y, cam) or not self.chasing then return end
@@ -244,12 +232,14 @@ function Enemy:attack(dt, cam)
                 local distToPlayer = math.sqrt(dx*dx + dy*dy)
                 if distToPlayer < hitRadius then
                     self.target:damage(self.type=="melee" and 5 or 15)
+                    Audio.play("attack_enemy")  -- PLAY ATTACK SOUND
                 end
             elseif self.type=="ranged" and hasLOS then
                 local dx, dy = self.telegraphX - self.x, self.telegraphY - self.y
                 local len = math.sqrt(dx*dx + dy*dy)
                 if len > 0 then dx, dy = dx/len*220, dy/len*220 end
                 table.insert(self.projectiles, {x=self.x, y=self.y, dx=dx, dy=dy, size=5})
+                Audio.play("attack_enemy")  -- PLAY ATTACK SOUND
             end
         end
     end
@@ -270,11 +260,8 @@ function Enemy:attack(dt, cam)
     end
 end
 
--------------------------------------------------------------------
 -- DRAW
--------------------------------------------------------------------
 function Enemy:draw()
-    -- Draw death animation
     if self.isDying then
         for _, p in ipairs(self.deathParticles) do
             love.graphics.setColor(self.color[1], self.color[2], self.color[3], p.alpha)
@@ -285,22 +272,18 @@ function Enemy:draw()
     
     if self.hp <= 0 then return end
 
-    -- Calculate stretch scale
     local scaleX, scaleY = 1, 1
     
     if self.isMoving then
-        -- Vertical stretch when walking (squash and stretch)
         local stretchFactor = math.sin(self.stretchTimer) * self.walkStretchAmount
-        scaleY = 1 + stretchFactor      -- stretch vertically
-        scaleX = 1 - stretchFactor * 0.5 -- squash horizontally (less than vertical)
+        scaleY = 1 + stretchFactor
+        scaleX = 1 - stretchFactor * 0.5
     else
-        -- Horizontal breathing when idle
         local breatheFactor = math.sin(self.stretchTimer * 0.5) * self.breatheStretchAmount
-        scaleX = 1 + breatheFactor      -- stretch horizontally
-        scaleY = 1 - breatheFactor * 0.3 -- slight vertical squash
+        scaleX = 1 + breatheFactor
+        scaleY = 1 - breatheFactor * 0.3
     end
     
-    -- Calculate stretched dimensions
     local drawWidth = self.size * scaleX
     local drawHeight = self.size * scaleY
 
@@ -334,9 +317,7 @@ function Enemy:draw()
     end
 end
 
--------------------------------------------------------------------
 -- SPAWN OFF-SCREEN
--------------------------------------------------------------------
 function Enemy:spawnAtEdge(playerX, playerY, mapWidth, mapHeight)
     local side = math.random(4)
     if side == 1 then

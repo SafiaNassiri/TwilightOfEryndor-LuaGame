@@ -1,6 +1,8 @@
 local Player = {}
 Player.__index = Player
 
+local Audio = require("audio")
+
 -- Constructor
 function Player:new(x, y, size)
     local p = {
@@ -120,8 +122,7 @@ function Player:attack(mx, my)
         })
 
         self.attackCooldown = self.attackDelay
-
-        if Audio then Audio.play("attack_player") end
+        Audio.play("attack_player")
     end
 end
 
@@ -169,7 +170,7 @@ function Player:damage(amount)
     if self.hitTimer <= 0 then
         self.hp = self.hp - amount
         self.hitTimer = self.hitDuration
-        if Audio then Audio.play("player_hurt") end
+        Audio.play("player_hurt")
     end
 end
 

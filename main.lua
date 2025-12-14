@@ -147,6 +147,7 @@ function love.update(dt)
         player:update(dt, spawner.enemies)
         spawner:update(dt)
         hud:update(dt)
+        hud:setShards(player.rareShards or 0)
 
         -- Check for victory (110+ shards)
         if player.rareShards >= 110 then
